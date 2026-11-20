@@ -1,12 +1,16 @@
-# ReVanced Magisk Module
-[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/rvc_magisk)
-[![CI](https://github.com/j-hc/revanced-magisk-module/actions/workflows/ci.yml/badge.svg?event=schedule)](https://github.com/j-hc/revanced-magisk-module/actions/workflows/ci.yml)
+# RVMM NoMount
 
-Extensive ReVanced builder  
+> [!NOTE]
+> This is j-hc's RVMM rewritten to utilize NoMount \
+> Magisk is **NOT** supported as NoMount only support KernelSU and APatch
 
-Get the [latest CI release](https://github.com/j-hc/revanced-magisk-module/releases).
+> [!IMPORTANT]
+> **This project is NOT provided by / related to original author repo.** \
+> DO **NOT** REPORT ISSUES TO ORIGINAL AUTHOR
 
-Use [**zygisk-detach**](https://github.com/j-hc/zygisk-detach) to detach YouTube and YT Music from Play Store if you are using magisk modules. 
+- Get the [latest CI release here](https://github.com/nleloc/rvmm-nomount/releases)
+
+- If you want, use [HMA-OSS](https://https://github.com/frknkrc44/HMA-OSS) to hide apps from Play Store to prevent update
 
 <details><summary><big>Features</big></summary>
 <ul>
@@ -19,7 +23,7 @@ Use [**zygisk-detach**](https://github.com/j-hc/zygisk-detach) to detach YouTube
     <ul>
      <li> handle installation of the correct version of the stock app and all that</li>
      <li> do not trigger root detections</li>
-     <li> receive updates from Magisk/KernelSU app</li>
+     <li> receive updates from KernelSU/AP app</li>
      <li> recompile invalidated odex for faster usage</li>
     </ul>
 </ul>
@@ -27,30 +31,27 @@ Use [**zygisk-detach**](https://github.com/j-hc/zygisk-detach) to detach YouTube
 
 ## To include/exclude patches or patch other apps
 
- * Star the repo :eyes:
- * Use the repo as a [template](https://github.com/new?template_name=revanced-magisk-module&template_owner=j-hc)
+ * Star the [original repo](https://github.com/j-hc/revanced-magisk-module) :eyes:
+ * Fork this repo
  * Customize [`config.toml`](./config.toml) using [rvmm-config-gen](https://j-hc.github.io/rvmm-config-gen/)
  * Run the build [workflow](../../actions/workflows/build.yml)
  * Grab your modules and APKs from [releases](../../releases)
 
-also see here [`CONFIG.md`](./CONFIG.md)
-
-## If you are having trouble with the classic mount method of the modules
-such as,
-- **"Reflash needed"** error after reboots
-- **"Suspicious mount detected"** warnings from root detector apps
-
-You can consider using [rvmm-zygisk-mount](https://github.com/j-hc/rvmm-zygisk-mount)
+also see [`CONFIG.md`](./CONFIG.md)
 
 ## Building Locally
-### On Termux
-```console
-bash <(curl -sSf https://raw.githubusercontent.com/j-hc/revanced-magisk-module/main/build-termux.sh)
-```
-
 ### On Linux
 ```console
-$ git clone https://github.com/j-hc/revanced-magisk-module --depth 1
-$ cd revanced-magisk-module
+$ git clone https://github.com/nleloc/rvmm-nomount --depth 1
+$ cd rvmm-nomount
 $ ./build.sh
 ```
+
+## DISCLAIMER
+> [!IMPORTANT]
+> I'm not responsible for anything that can happen on your device by using this module. \
+> Including bricked device, data loss or accidentally trigger a thermonuclear war.
+
+## CREDITS
+- [NoMount](https://github.com/maxsteeel/nomount): Provide in-kernel VFS file redirection without mounting
+- [RVMM](https://github.com/j-hc/revanced-magisk-module): Original project
