@@ -8,9 +8,9 @@
 > **This project is NOT provided by / related to original author repo.** \
 > DO **NOT** REPORT ISSUES TO ORIGINAL AUTHOR
 
-- Get the [latest CI release here](https://github.com/nleloc/rvmm-nomount/releases)
+- Get the [latest CI release here](https://github.com/nleloc/rvmm-nm-build/releases)
 
-- If you want, use [HMA-OSS](https://https://github.com/frknkrc44/HMA-OSS) to hide apps from Play Store to prevent update
+- If you want, use [HMA-OSS](https://github.com/frknkrc44/HMA-OSS) to hide apps from Play Store to prevent update
 
 <details><summary><big>Features</big></summary>
 <ul>
@@ -42,8 +42,8 @@ also see [`CONFIG.md`](./CONFIG.md)
 ## Building Locally
 ### On Linux
 ```console
-$ git clone https://github.com/nleloc/rvmm-nomount --depth 1
-$ cd rvmm-nomount
+$ git clone https://github.com/nleloc/rvmm-nm-build --depth 1
+$ cd rvmm-nm-build
 $ ./build.sh
 ```
 
