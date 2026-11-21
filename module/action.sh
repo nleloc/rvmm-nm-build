@@ -5,22 +5,26 @@ export MODDIR
 
 echo ""
 
-DFILE="$MODDIR/disabled_by_action"
+if [ -f "$MODDIR/needs_reflash" ]; then
+	echo "* The system app was only debloated. Reboot, then reflash this module, please."
+	exit 0
+fi
 
-MS=$(get_mounts)
-if [ -z "$MS" ]; then
-	rm -f "$DFILE"
+if ! check_nomount; then
+	echo "ERROR: NoMount driver not responding. Is the NoMount module installed and enabled?"
+	exit 1
+fi
+
+if [ -z "$(get_mounts)" ]; then
 	if mount_rv_now; then
 		echo "* Enabled successfully"
+		echo ""
+		get_mounts
 	else
 		echo "* Failed to enable"
 	fi
-	echo ""
-	echo "$MS"
 else
-	touch "$DFILE"
-	umount_all
+	remove_current_nm_rule
 	echo "* Disabled successfully"
-
-	ch_desc "⛔ Disabled by action"
+	ch_desc "[DISABLED] Restored to original app until reboot. Run Action again to mount."
 fi

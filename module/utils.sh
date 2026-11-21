@@ -1,14 +1,29 @@
 #!/system/bin/sh
 
-RVPATH=/data/adb/rvhc/${MODDIR##*/}.apk
 . "$MODDIR/config"
+NM_BIN=/data/adb/modules/nomount/bin/nm
+NM_BIN_UPDATE=/data/adb/modules_update/nomount/bin/nm
+
+check_nomount() {
+	if "$NM_BIN" version >/dev/null 2>&1; then
+		return 0
+	fi
+	if "$NM_BIN_UPDATE" version >/dev/null 2>&1; then
+		NM_BIN=$NM_BIN_UPDATE
+		return 0
+	fi
+	return 1
+}
 
 ch_desc() {
-	sed -i "s|^description=.*|description=${1}|" "$MODDIR/module.prop"
+	local d
+  d=$(printf '%s' "$1" | tr '\r\n' '  ' | sed 's/[\\&|]/\\&/g')
+	sed -i "s|^description=.*|description=${d}|" "$MODDIR/module.prop"
 }
 
 ch_desc_err() {
-	ch_desc "⚠️ Needs reflash: '${1}'"
+	ch_desc "[⚠️ Needs reflash] '${1}'"
+  echo "ERROR: ${1}" >&2
 }
 
 pmex() {
@@ -27,26 +42,26 @@ get_basepath() {
 	BASEPATH=$(pmex path "$PKG_NAME")
 	SVCL=$?
 
-	BASEPATH=${BASEPATH##*:} BASEPATH=${BASEPATH%/*}
+	[ $SVCL = 0 ] && BASEPATH=${BASEPATH##*:} BASEPATH=${BASEPATH%/*}
 	echo "$BASEPATH"
 	return $SVCL
 }
 
-umount_all() {
-	su -M -c grep -F "$PKG_NAME" /proc/mounts | while read -r line; do
-		mp=${line#* } mp=${mp%% *} mp=${mp%%\\*}
-		su -M -c umount -l "${mp}"
+remove_current_nm_rule() {
+  "$NM_BIN" rule list 2>/dev/null | grep -F "/${MODDIR##*/}/base-rvmm.apk" | while IFS= read -r line; do
+		src=${line%% -> *} # nm rule has a pattern like this: RealFile -> MountedFile
+		[ -n "$src" ] && "$NM_BIN" rule del "$src"
 	done
 	am force-stop "$PKG_NAME" || :
 }
 
 get_mounts() {
-	su -M -c grep -F "$PKG_NAME" /proc/mounts || :
+  "$NM_BIN" rule list 2>/dev/null | grep -F "/${MODDIR##*/}/base-rvmm.apk" || :
 }
 
 mount_rv() {
 	if [ ! -d "${1}/lib" ]; then
-		ch_desc_err "Your installation got broken. Dont report this, consider using rvmm-zygisk-mount."
+		ch_desc_err "Your installation got broken. Try reflash the module."
 		return 1
 	fi
 	VERSION=$(get_app_version)
@@ -54,12 +69,11 @@ mount_rv() {
 		ch_desc_err "Version mismatch (installed:$VERSION, module:$PKG_VER)"
 		return 1
 	fi
-	umount_all
-	if ! OP=$(chcon u:object_r:apk_data_file:s0 "$RVPATH" 2>&1); then
-		ch_desc_err "Error chcon: '$OP'"
+	remove_current_nm_rule
+	if ! OP=$("$NM_BIN" rule add "${1}/base.apk" "$MODDIR/base-rvmm.apk" 2>&1); then
+		ch_desc_err "NoMount rule add failed: '$OP'"
 		return 1
 	fi
-	mount -o bind "$RVPATH" "${1}/base.apk"
 	am force-stop "$PKG_NAME"
 	cp -f "$MODDIR/module.prop.orig" "$MODDIR/module.prop"
 	return 0

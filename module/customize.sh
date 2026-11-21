@@ -1,10 +1,28 @@
 #!/system/bin/sh
-export MODULE_HOT_INSTALL_REQUEST="true"
-MODDIR="$MODPATH" . "$MODPATH/utils.sh"
+
+MODDIR="$MODPATH"
+. "$MODPATH/utils.sh"
+
+# root impl check
+if [ -z "$KSU" ] && [ -z "$APATCH" ]; then
+    abort "ABORTING: NoMount does NOT support Magisk, so neither does this module!"
+fi
+
+# checks for nomount, see utils.sh
+check_nomount || abort "ERROR: Your kernel does NOT integrated NoMount or you haven't installed NoMount module!"
+ui_print "[*] NoMount driver responded correctly, continuing..."
+
+# copy the old post-mount.sh script (which was used to debloat the system's youtube)
+# from old folder to new folder, as I do NOT want to make a permanent debloat script
+#
+# i choose post-mount cuz interrupting while NM is mounting isn't a great idea
+# this module doesn't support Magisk anyways
+OLD_DEBLOAT_SCRIPT=/data/adb/modules/${MODPATH##*/}/post-mount.sh
+[ -f "$OLD_DEBLOAT_SCRIPT" ] && cp -af "$OLD_DEBLOAT_SCRIPT" "$MODPATH/"
 
 ui_print ""
 if [ -n "$MODULE_ARCH" ] && [ "$MODULE_ARCH" != "$ARCH" ]; then
-	abort "ERROR: Wrong arch
+	abort "ERROR: Wrong / Unsupported arch
 Your device: $ARCH
 Module: $MODULE_ARCH"
 fi
@@ -18,9 +36,8 @@ elif [ "$ARCH" = "x64" ]; then
 	ARCH_LIB=x86_64
 else abort "ERROR: unreachable: ${ARCH}"; fi
 
-set_perm_recursive "$MODPATH/bin" 0 0 0755 0777
-
-umount_all
+# check utils.sh
+remove_current_nm_rule
 
 IS_SYSTEM_APP=false
 UPDATED_SYSTEM_APP=false
@@ -56,148 +73,181 @@ if BASEPATH=$(get_basepath); then
 	fi
 fi
 
-install() {
-	if [ ! -f "$MODPATH/stock/base.apk" ]; then
-		abort "ERROR: Stock $PKG_NAME apk was not found"
-	fi
-	install_err=""
+### pm verifier shit
+pm_verifier_off() {
 	VERIF1=$(settings get global verifier_verify_adb_installs)
 	VERIF2=$(settings get global package_verifier_enable)
 	settings put global verifier_verify_adb_installs 0
 	settings put global package_verifier_enable 0
+}
 
-	SZ=$(stat -c "%s" "$MODPATH"/stock/*.apk | awk '{sum += $0} END {print sum}')
-	for IT in 1 2; do
-		ui_print "* Updating $PKG_NAME to $PKG_VER"
-		if ! SES=$(pmex install-create --user 0 -i com.android.vending -r -S "$SZ"); then
-			ui_print "ERROR: install-create failed"
-			install_err="$SES"
-			break
-		fi
-		SES=${SES#*[} SES=${SES%]*}
-
-		for apki in "$MODPATH/stock"/*.apk; do
-			set_perm "${apki}" 1000 1000 644 u:object_r:apk_data_file:s0
-			if ! op=$(pmex install-write -S "$SZ" "$SES" "$(basename "${apki}")" "${apki}"); then
-				ui_print "ERROR: install-write failed"
-				install_err="$op"
-				break
-			fi
-		done
-		if [ "$install_err" ]; then break; fi
-
-		if ! op=$(pmex install-commit "$SES"); then
-			ui_print "$op"
-			if echo "$op" | grep -q -e INSTALL_FAILED_VERSION_DOWNGRADE -e INSTALL_FAILED_UPDATE_INCOMPATIBLE -e INSTALL_FAILED_DUPLICATE; then
-				if [ "$IS_SYSTEM_APP" = true ] && [ "$UPDATED_SYSTEM_APP" = false ]; then
-					if ! BASEPATH=$(get_basepath); then
-						install_err="ERROR: basepath failed."
-						break
-					fi
-					ui_print "* Debloating $BASEPATH"
-
-					mkdir -p /data/adb/rvhc/empty /data/adb/post-fs-data.d
-					chcon u:object_r:system_file:s0 /data/adb/rvhc/empty
-					P="/data/adb/post-fs-data.d/$PKG_NAME-uninstall.sh"
-					echo "mount -o bind /data/adb/rvhc/empty ${BASEPATH}" >"$P"
-					chmod +x "$P"
-
-					ui_print "* Created the uninstall script."
-					ui_print ""
-					ui_print "* Reboot and reflash the module!"
-					install_err=" "
-					break
-				fi
-
-				if [ "$UPDATED_SYSTEM_APP" = true ]; then
-					ui_print "* Uninstalling updated system app..."
-					if ! op=$(pmex uninstall-system-updates "$PKG_NAME" 2>&1); then
-						ui_print "$op"
-					else
-						UPDATED_SYSTEM_APP=false
-					fi
-				else
-					ui_print "* Uninstalling user app..."
-					if ! op=$(pmex uninstall --user 0 "$PKG_NAME"); then
-						ui_print "$op"
-					fi
-				fi
-
-				if [ $IT = 2 ]; then
-					install_err="ERROR: uninstall failed."
-					break
-				fi
-				continue
-			fi
-			ui_print "ERROR: install-commit failed"
-			install_err="$op"
-			break
-		fi
-		if BASEPATH=$(get_basepath); then
-			:
-		else
-			install_err=" "
-			break
-		fi
-		break
-	done
+pm_verifier_restore() {
 	settings put global verifier_verify_adb_installs "$VERIF1"
 	settings put global package_verifier_enable "$VERIF2"
-	if [ "$install_err" ]; then
-		abort "$install_err"
-	fi
 }
-if [ $INS = true ] && ! install; then abort; fi
+###
+
+# return code:
+  # 0: ok
+  # 1: normal error
+  # 2: conflict (downgrade/incompatible/duplicate)
+pm_install_attempt() {
+  local sz ses apki apksz out
+	sz=$(stat -c "%s" "$MODPATH"/stock/*.apk | awk '{sum += $0} END {print sum}')
+	if ! ses=$(pmex install-create --user 0 -i com.android.vending -r -S "$sz"); then
+		ui_print "ERROR: install-create failed"
+		INSTALL_ERR="$ses"
+		return 1
+	fi
+  ses=${ses#*[} ses=${ses%]*}
+
+	for apki in "$MODPATH"/stock/*.apk; do
+		apksz=$(stat -c "%s" "$apki")
+		if ! out=$(pm install-write -S "$apksz" "$ses" "$(basename "$apki")" - < "$apki" 2>&1); then
+			pmex install-abandon "$ses" >/dev/null 2>&1
+			ui_print "ERROR: install-write failed"
+			INSTALL_ERR="$out"
+			return 1
+		fi
+	done
+
+	if out=$(pmex install-commit "$ses"); then
+		return 0
+	fi
+  pmex install-abandon "$ses" >/dev/null 2>&1
+	ui_print "$out"
+	if echo "$out" | grep -q -e INSTALL_FAILED_VERSION_DOWNGRADE -e INSTALL_FAILED_UPDATE_INCOMPATIBLE -e INSTALL_FAILED_DUPLICATE; then
+		return 2
+	fi
+	ui_print "ERROR: pm install failed"
+	INSTALL_ERR="$out"
+	return 1
+}
+
+# code 36: needs reboot and reflash
+debloat_system_app() {
+	if ! BASEPATH=$(get_basepath); then
+		INSTALL_ERR="ERROR: basepath failed."
+		return 1
+	fi
+	ui_print "* Creating script to debloat $BASEPATH"
+  printf '%s\n' \
+  '#!/system/bin/sh' \
+  "/data/adb/modules/nomount/bin/nm rule add --whiteout \"$BASEPATH\"" \
+  >"$MODPATH/post-mount.sh"
+	chmod +x "$MODPATH/post-mount.sh"
+	ui_print "* Created the post-mount script."
+	return 36
+}
+
+pm_resolve_conflict() {
+	local out
+	if [ "$UPDATED_SYSTEM_APP" = true ]; then
+		ui_print "* Uninstalling updated system app..."
+		if out=$(pmex uninstall-system-updates "$PKG_NAME" 2>&1); then
+			UPDATED_SYSTEM_APP=false
+		else
+			ui_print "$out"
+		fi
+	else
+		ui_print "* Uninstalling user app..."
+		out=$(pmex uninstall --user 0 "$PKG_NAME") || ui_print "$out"
+	fi
+	return 0
+}
+
+pm_install_with_retry() {
+	local it rc
+	for it in 1 2; do
+		ui_print "* Updating $PKG_NAME to $PKG_VER"
+		pm_install_attempt; rc=$?
+		[ $rc = 0 ] && return 0
+		[ $rc = 1 ] && return 1
+		# rc = 2: conflict
+		if [ "$IS_SYSTEM_APP" = true ] && [ "$UPDATED_SYSTEM_APP" = false ]; then
+			debloat_system_app
+			return $?
+		fi
+		if [ $it = 2 ]; then
+			INSTALL_ERR="ERROR: still conflicting after uninstall."
+			return 1
+		fi
+		pm_resolve_conflict; rc=$?
+		[ $rc = 0 ] || return $rc
+	done
+}
+
+pm_install_stock() {
+	local rc
+	INSTALL_ERR=""
+	[ -f "$MODPATH/stock/base.apk" ] || {
+		INSTALL_ERR="ERROR: Stock $PKG_NAME apk was not found"
+		return 1
+	}
+	pm_verifier_off
+	pm_install_with_retry; rc=$?
+	pm_verifier_restore
+	[ $rc = 0 ] || return $rc
+	BASEPATH=$(get_basepath) || { INSTALL_ERR="ERROR: basepath failed."; return 1; }
+}
+
+
+
+# NOTE: exit 36: needs reflash, check up there :p
+if [ "$INS" = true ]; then
+	pm_install_stock; rc=$?
+	case $rc in
+		0) ;;
+		36)
+			rm -rf "$MODPATH/stock/"
+      ui_print " "
+      ui_print " "
+			ui_print "* Reboot, then reflash this module, please"
+      ui_print "* Reboot, then reflash this module, please"
+      ui_print "* Reboot, then reflash this module, please"
+      ch_desc_err "Only debloated, please reflash this module after reboot."
+      sleep 5
+      : >"$MODPATH/needs_reflash"
+			return 0
+			;;
+		*) abort "$INSTALL_ERR" ;;
+	esac
+fi
+
+# extract native libs
 BASEPATHLIB=${BASEPATH}/lib/${ARCH}
-if [ $INS = true ] || [ -z "$(ls -A1 "$BASEPATHLIB")" ]; then
+if [ "$INS" = true ] || [ -z "$(ls -A1 "$BASEPATHLIB" 2>/dev/null)" ]; then
 	ui_print "* Extracting native libs"
-	if [ ! -d "$BASEPATHLIB" ]; then mkdir -p "$BASEPATHLIB"; else rm -f "$BASEPATHLIB"/* >/dev/null 2>&1 || :; fi
+	mkdir -p "$BASEPATHLIB"
+	rm -f "$BASEPATHLIB"/* >/dev/null 2>&1
 	if op=$(unzip -o -j "$MODPATH/stock/base.apk" "lib/${ARCH_LIB}/*" -d "$BASEPATHLIB" 2>&1); then
 		set_perm_recursive "${BASEPATH}/lib" 1000 1000 755 755 u:object_r:apk_data_file:s0
 	else
-		echo >&2 "ERROR: extracting native libs failed: '$op'"
+		ui_print "ERROR: extracting native libs failed: '$op'"
 	fi
 fi
 
-set_perm "$MODPATH/base.apk" 1000 1000 644 u:object_r:apk_data_file:s0
+# set apk perm
+set_perm "$MODPATH/base-rvmm.apk" 1000 1000 644 u:object_r:apk_data_file:s0
+cp -f "$MODPATH/module.prop" "$MODPATH/module.prop.orig" # backup before runs hotinstall
 
-ui_print "* Mounting $PKG_NAME"
-# move out the apk from /data/adb/modules/.. to /data/adb/rvhc to not trip some root detections
-mkdir -p "/data/adb/rvhc"
-mv -f "$MODPATH/base.apk" "$RVPATH"
-
-if ! op=$(su -M -c mount -o bind "$RVPATH" "$BASEPATH/base.apk" 2>&1); then
-	ui_print "ERROR: Mount failed!"
-	ui_print "$op"
-fi
-am force-stop "$PKG_NAME"
-
-ui_print "* Optimizing $PKG_NAME"
-cmd package compile -m speed-profile -f "$PKG_NAME" >/dev/null 2>&1
-# nohup cmd package compile -m speed-profile -f "$PKG_NAME" >/dev/null 2>&1
-
-if [ "$KSU" ]; then
-	DUMPSYS=$(dumpsys package "$PKG_NAME" 2>&1)
-	UID=$(echo "$DUMPSYS" | grep -m1 uid=)
-	UID=${UID#*=} UID=${UID%% *}
-	if [ -z "$UID" ]; then
-		UID=$(echo "$DUMPSYS" | grep -m1 userId=)
-		UID=${UID#*=} UID=${UID%% *}
-	fi
-	if [ "$UID" ]; then
-		if ! OP=$("${MODPATH:?}/bin/$ARCH/ksu_profile" "$UID" "$PKG_NAME" 2>&1); then
-			ui_print "  $OP"
-			ui_print "  * In your root manager app,"
-			ui_print "    disable 'Unmount modules' for $PKG_NAME"
-		fi
-	else
-		ui_print "ERROR: UID could not be found for $PKG_NAME"
+if [ "$KSU_HAS_HOT_INSTALL" = true ]; then
+	export MODULE_HOT_INSTALL_REQUEST=true
+	export MODULE_HOT_RUN_SCRIPT=hotinstall.sh
+	ui_print "* Hot install: rule will be applied right after install"
+else
+	ui_print "* Creating NoMount rule for $PKG_NAME"
+	if ! op=$(sh "$MODPATH/hotinstall.sh" 2>&1); then
+		ui_print "ERROR: NoMount rule add failed!"
+		ui_print "$op"
 	fi
 fi
 
-rm -rf "${MODPATH:?}/bin" "$MODPATH/stock/"
-cp -f "$MODPATH/module.prop" "$MODPATH/module.prop.orig"
+rm -rf "$MODPATH/stock/"
+ui_print "Done !"
+ui_print "Welcome to RVMM-NoMount! You don't need to reboot!"
 
-ui_print "* Done. No need to reboot."
-ui_print "  by j-hc (github.com/j-hc)"
-ui_print " "
+if [ "$KSU_HAS_HOT_INSTALL" != true ]; then
+  ui_print " "
+  ui_print "[FYI] Reboot if you want to use Action to quickly toggle on/off mount! Otherwise just use without reboot!"
+fi
