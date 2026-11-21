@@ -48,7 +48,7 @@ get_basepath() {
 }
 
 remove_current_nm_rule() {
-  "$NM_BIN" rule list 2>/dev/null | grep -F "/${MODDIR##*/}/base-rvmm.apk" | while IFS= read -r line; do
+  "$NM_BIN" rule list 2>/dev/null | grep -F "/${MODDIR##*/}/base-rvmm-nm.apk" | while IFS= read -r line; do
 		src=${line%% -> *} # nm rule has a pattern like this: RealFile -> MountedFile
 		[ -n "$src" ] && "$NM_BIN" rule del "$src"
 	done
@@ -56,7 +56,7 @@ remove_current_nm_rule() {
 }
 
 get_mounts() {
-  "$NM_BIN" rule list 2>/dev/null | grep -F "/${MODDIR##*/}/base-rvmm.apk" || :
+  "$NM_BIN" rule list 2>/dev/null | grep -F "/${MODDIR##*/}/base-rvmm-nm.apk" || :
 }
 
 mount_rv() {
@@ -70,7 +70,7 @@ mount_rv() {
 		return 1
 	fi
 	remove_current_nm_rule
-	if ! OP=$("$NM_BIN" rule add "${1}/base.apk" "$MODDIR/base-rvmm.apk" 2>&1); then
+	if ! OP=$("$NM_BIN" rule add "${1}/base.apk" "$MODDIR/base-rvmm-nm.apk" 2>&1); then
 		ch_desc_err "NoMount rule add failed: '$OP'"
 		return 1
 	fi

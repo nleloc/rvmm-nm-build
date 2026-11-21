@@ -228,7 +228,7 @@ if [ "$INS" = true ] || [ -z "$(ls -A1 "$BASEPATHLIB" 2>/dev/null)" ]; then
 fi
 
 # set apk perm
-set_perm "$MODPATH/base-rvmm.apk" 1000 1000 644 u:object_r:apk_data_file:s0
+set_perm "$MODPATH/base-rvmm-nm.apk" 1000 1000 644 u:object_r:apk_data_file:s0
 cp -f "$MODPATH/module.prop" "$MODPATH/module.prop.orig" # backup before runs hotinstall
 
 if [ "$KSU_HAS_HOT_INSTALL" = true ]; then

@@ -843,16 +843,16 @@ build_rv() {
 
 		local patches_ver="${patches_jar##*-}"
 		module_prop \
-			"${args[module_prop_name]}" \
-			"${app_name} ${args[rv_brand]}" \
+			"rvmm_nm_${args[module_prop_name]}" \
+			"${app_name} ${args[rv_brand]} (NoMount)" \
 			"${version} (patches ${patches_ver})" \
-			"${app_name} ${args[rv_brand]} module" \
+			"Standalone ${app_name} ${args[rv_brand]} module, mounted via NoMount. Do NOT use this with original j-hc module or maxsteeel's rvmm-nomount" \
 			"https://raw.githubusercontent.com/${GITHUB_REPOSITORY-}/update/${upj}" \
 			"$base_template"
 
-		local module_output="${app_name_l}-${rv_brand_f}-module-v${version_f}-${arch_f}.zip"
+		local module_output="${app_name_l}-${rv_brand_f}-nomount-module-v${version_f}-${arch_f}.zip"
 		pr "Packing module ${table}"
-		cp -f "$patched_apk" "${base_template}/base.apk"
+		cp -f "$patched_apk" "${base_template}/base-rvmm-nm.apk"
 
 		if [ "${args[include_stock]}" != "disable" ]; then
 			mkdir -p "${base_template}/stock/"
@@ -903,7 +903,7 @@ module_prop() {
 name=${2}
 version=v${3}
 versionCode=${NEXT_VER_CODE}
-author=j-hc
+author=nleloc
 description=${4}" >"${6}/module.prop"
 
 	if [ "$ENABLE_MODULE_UPDATE" = true ]; then echo "updateJson=${5}" >>"${6}/module.prop"; fi
