@@ -60,6 +60,7 @@ for table_name in $(toml_get_table_names); do
 	enabled=$(toml_get "$t" enabled) || enabled=true
 	vtf "$enabled" "enabled"
 	if [ "$enabled" = false ]; then continue; fi
+	if [ "$(toml_get "$t" build-mode || echo apk)" = apk ]; then continue; fi
 	if ((idx >= PARALLEL_JOBS)); then
 		wait -n
 		idx=$((idx - 1))
@@ -153,8 +154,9 @@ wait
 _clean_tmp
 if [ -z "$(ls -A1 "${BUILD_DIR}")" ]; then abort "All builds failed."; fi
 
-log "\nInstall [Microg](https://github.com/MorpheApp/MicroG-RE/) for non-root YouTube and YT Music APKs"
-log "Use [zygisk-detach](https://github.com/j-hc/zygisk-detach) to detach YouTube and YT Music modules from Play Store"
+log "\nFor non-root APKs, please use the original [revanced-magisk-module](https://github.com/j-hc/revanced-magisk-module/releases) repo"
+log "Use [HMA-OSS](https://github.com/frknkrc44/HMA-OSS/releases) to hide apps from Play Store to prevent updates."
+log "\n> [!WARNING]\n> CorePatch variant APKs require [CorePatch](https://github.com/LSPosed/CorePatch/releases) (LSPosed) or [PMPatch](https://github.com/vova7878-modules/PMPatch/releases) to install."
 log "\n[rvmm-nm-build](https://github.com/nleloc/rvmm-nm-build)\n"
 log "$(cat "$TEMP_DIR"/*/changelog.md)"
 
