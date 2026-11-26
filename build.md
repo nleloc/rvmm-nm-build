@@ -1,4 +1,3 @@
-GooglePhotos: 7.92.0.977185651  
 Music-Morphe (arm64-v8a): 9.30.53  
 Music-Morphe (arm-v7a): 9.30.53  
 YouTube-Morphe: 21.30.216  
@@ -11,10 +10,10 @@ Use [HMA-OSS](https://github.com/frknkrc44/HMA-OSS/releases) to hide apps from P
 
 [rvmm-nm-build](https://github.com/nleloc/rvmm-nm-build)
   
-Patches: MorpheApp/morphe-patches/patches-2.3.0.mpp  
-[Changelog](https://github.com/MorpheApp/morphe-patches/releases/tag/v2.3.0)
-
-Patches: RookieEnough/De-Vanced/patches-1.6.4.mpp  
-[Changelog](https://github.com/RookieEnough/De-Vanced/releases/tag/v1.6.4)
+Patches: MorpheApp/morphe-patches/patches-2.4.0.mpp  
+[Changelog](https://github.com/MorpheApp/morphe-patches/releases/tag/v2.4.0)
 
 CLI: MorpheApp/morphe-cli/morphe-desktop-2.3.0-all.jar    
+
+Skipped:  
+Patches: RookieEnough/De-Vanced/patches-1.6.4.mpp    
